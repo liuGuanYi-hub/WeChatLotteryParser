@@ -1,0 +1,155 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "WeChat Lottery Parser",
+    "subtitle": "Screenshot OCR to animated lottery workflow",
+    "output": "dynamic-archify-architecture.html"
+  },
+  "components": [
+    {
+      "id": "browser",
+      "type": "external",
+      "label": "Browser",
+      "sublabel": "Upload + draw",
+      "pos": [
+        20,
+        250
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "frontend",
+      "type": "frontend",
+      "label": "Web UI",
+      "sublabel": "HTML + JS",
+      "pos": [
+        250,
+        250
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "FastAPI",
+      "sublabel": "REST endpoints",
+      "pos": [
+        480,
+        250
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "ocr",
+      "type": "backend",
+      "label": "OCR Pipeline",
+      "sublabel": "OpenCV + PaddleOCR",
+      "pos": [
+        700,
+        120
+      ],
+      "size": [
+        170,
+        64
+      ]
+    },
+    {
+      "id": "lottery",
+      "type": "backend",
+      "label": "Lottery Engine",
+      "sublabel": "Random + rounds",
+      "pos": [
+        700,
+        380
+      ],
+      "size": [
+        170,
+        64
+      ]
+    },
+    {
+      "id": "session",
+      "type": "database",
+      "label": "Session State",
+      "sublabel": "Participants + winners",
+      "pos": [
+        960,
+        250
+      ],
+      "size": [
+        170,
+        64
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Lottery backend",
+      "wraps": [
+        "api",
+        "ocr",
+        "lottery",
+        "session"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "from": "browser",
+      "to": "frontend",
+      "label": "upload",
+      "variant": "emphasis"
+    },
+    {
+      "from": "frontend",
+      "to": "api",
+      "label": "HTTP",
+      "variant": "emphasis"
+    },
+    {
+      "from": "api",
+      "to": "ocr",
+      "label": "image",
+      "fromSide": "top",
+      "toSide": "bottom",
+      "route": "orthogonal-v"
+    },
+    {
+      "from": "api",
+      "to": "lottery",
+      "label": "draw",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "route": "orthogonal-v",
+      "variant": "emphasis"
+    },
+    {
+      "from": "ocr",
+      "to": "session",
+      "label": "participants",
+      "fromSide": "right",
+      "toSide": "top",
+      "route": "orthogonal-h"
+    },
+    {
+      "from": "lottery",
+      "to": "session",
+      "label": "winners",
+      "fromSide": "right",
+      "toSide": "bottom",
+      "route": "orthogonal-h"
+    }
+  ],
+  "cards": []
+}
