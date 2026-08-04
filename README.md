@@ -1,63 +1,84 @@
-# 微信抽奖解析器
+# 简易名单抽奖器
 
-一个基于 FastAPI 的 Web 抽奖工具：从微信红包/抽奖截图中识别头像和昵称，生成参与者池，并通过动画流程完成多轮抽奖。
+一个基于 FastAPI 的本地名单抽奖器。手动输入参与者名单，由服务端安全随机抽取并记录多轮中奖结果。
 
-## 功能
+## 当前功能
 
-- 上传 PNG、JPG/JPEG 截图并检测圆形头像区域。
-- 使用 OpenCV、Pillow 和 PaddleOCR 识别头像与昵称。
-- 支持多轮抽奖、中奖者移除、结果查询和重置。
-- 浏览器端提供上传、抽奖动画和结果导出入口。
+- 每行输入一名参与者。
+- 重复昵称按独立抽奖名额处理。
+- 创建独立抽奖场次。
+- 服务端使用 `secrets.SystemRandom` 抽奖。
+- 多轮抽奖自动排除已中奖者。
+- 查看参与者状态和中奖历史。
+- 重置本场抽奖。
+- 导出文本中奖名单。
 
-## 动态系统架构图
-
-![微信抽奖解析器动态系统架构图](docs/architecture/dynamic-archify-architecture.gif)
-
-- [打开交互式动态架构图](docs/architecture/dynamic-archify-architecture.html)
-- [查看架构源数据](docs/architecture/dynamic-archify-architecture.json)
-
-## 技术栈
-
-- 后端：Python 3.8+、FastAPI、Uvicorn
-- 图像处理：OpenCV、Pillow
-- OCR：PaddleOCR
-- 前端：原生 HTML、CSS、JavaScript
-- 状态：本地会话状态，不依赖外部数据库
+当前版本不读取图片、不识别头像、不加载 OCR，也不需要数据库或外部服务。
 
 ## 快速开始
 
-```bash
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-浏览器访问 `http://localhost:8000`，API 文档位于 `/docs` 和 `/redoc`。
+浏览器访问：<http://127.0.0.1:8000>
 
-## 核心流程
+API 文档：<http://127.0.0.1:8000/docs>
 
-1. 浏览器上传截图。
-2. FastAPI 校验文件并交给 OCR/头像处理服务。
-3. 系统按位置配对头像与昵称，形成参与者列表。
-4. 抽奖引擎随机选择中奖者并维护剩余池。
-5. 前端播放抽奖动画并展示、导出结果。
+## API
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| POST | `/api/lottery/sessions` | 创建抽奖场次 |
+| GET | `/api/lottery/sessions/{session_id}` | 查询场次状态 |
+| POST | `/api/lottery/sessions/{session_id}/draw` | 抽取一人 |
+| POST | `/api/lottery/sessions/{session_id}/reset` | 重置本场 |
+| GET | `/api/lottery/sessions/{session_id}/history` | 查询中奖历史 |
+| GET | `/healthz` | 健康检查 |
+
+创建场次示例：
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri http://127.0.0.1:8000/api/lottery/sessions `
+  -ContentType 'application/json' `
+  -Body '{"participants":["张三","李四","王五"]}'
+```
 
 ## 项目结构
 
-app/               # API、核心逻辑、模型和服务
-static/            # CSS 和 JavaScript
-templates/         # HTML 模板
-tests/             # 测试
-docs/              # 规格、API、设计和架构文档
-requirements.txt   # Python 依赖
+```text
+app/
+├── api/routes.py                 # 抽奖 API
+├── core/lottery.py               # 无状态安全随机引擎
+├── core/config.py                # 应用配置
+├── models/participant.py         # 参与者模型
+├── services/lottery_service.py   # 场次和中奖状态
+└── main.py                       # FastAPI 入口
+static/                           # CSS 和 JavaScript
+templates/                        # HTML 页面
+tests/                            # 自动化测试
+docs/LOTTERY_V2.md                # 当前设计说明
+```
 
-## 文档与测试
+## 测试
 
-- [功能规格](docs/SPEC.md)
-- [API 设计](docs/API.md)
-- [技术架构](docs/ARCHITECTURE.md)
-- `pytest`
+```powershell
+python -m pytest -q
+python -m compileall -q app tests
+```
+
+## 当前限制
+
+- 场次状态保存在进程内，服务重启后会丢失。
+- 当前没有登录、权限和多人协作功能。
+- 当前不保存原始名单文件。
+
+如未来需要跨重启保存结果，再增加 SQLite；如需要多人协作，再增加数据库、缓存和权限控制。
 
 ## 许可证
 

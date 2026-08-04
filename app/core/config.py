@@ -1,29 +1,26 @@
-from pydantic_settings import BaseSettings
 from functools import lru_cache
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    APP_NAME: str = "微信抽奖解析器"
-    APP_VERSION: str = "1.0.0"
-    DEBUG: bool = False
-    
-    HOST: str = "0.0.0.0"
-    PORT: int = 8000
-    
-    OCR_CONFIDENCE_THRESHOLD: float = 0.8
-    AVATAR_MIN_RADIUS: int = 30
-    AVATAR_MAX_RADIUS: int = 80
-    
-    AVATAR_SIZE: int = 100
-    
-    MAX_FILE_SIZE: int = 10 * 1024 * 1024
-    ALLOWED_EXTENSIONS: list = [".png", ".jpg", ".jpeg"]
-    
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    """纯名单抽奖器的运行配置。"""
+
+    app_name: str = "简易抽奖器"
+    app_version: str = "2.0.0"
+    debug: bool = False
+    host: str = "127.0.0.1"
+    port: int = 8000
+    max_participants: int = 1000
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        case_sensitive=False,
+    )
 
 
-@lru_cache()
+@lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings()

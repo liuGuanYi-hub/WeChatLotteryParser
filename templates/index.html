@@ -3,93 +3,87 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>微信抽奖解析器</title>
+    <meta name="description" content="简单、清晰、可重复操作的名单抽奖器">
+    <title>简易抽奖器</title>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-    <div class="page-container">
-        <header class="header">
-            <div class="header-left">
-                <div class="logo">🎯</div>
-                <h1 class="title">微信抽奖解析器</h1>
+    <main class="app-shell">
+        <header class="app-header">
+            <div>
+                <p class="eyebrow">FAIR DRAW</p>
+                <h1>简易抽奖器</h1>
+                <p class="subtitle">名单交给服务端抽取，浏览器只负责展示结果。</p>
             </div>
-            <div class="header-right">
-                <button class="btn-text" id="btn-reupload" style="display: none;">
-                    <span>↻</span> 重新上传
-                </button>
-                <button class="btn-text" id="btn-export" style="display: none;">
-                    <span>↓</span> 导出结果
-                </button>
+            <div class="header-actions">
+                <button class="button button-ghost" id="new-session-button" type="button">新建抽奖</button>
+                <button class="button button-ghost" id="export-button" type="button" disabled>导出结果</button>
             </div>
         </header>
 
-        <main class="main-content">
-            <div class="upload-area" id="upload-area">
-                <div class="upload-content" id="upload-content">
-                    <div class="upload-icon">📤</div>
-                    <div class="upload-title">上传图片</div>
-                    <div class="upload-subtitle">点击或拖拽微信截图到这里</div>
+        <section class="panel setup-panel" id="setup-panel" aria-labelledby="setup-title">
+            <div class="panel-heading">
+                <div>
+                    <p class="section-kicker">STEP 01</p>
+                    <h2 id="setup-title">输入参与者名单</h2>
                 </div>
-                <div class="upload-progress" id="upload-progress" style="display: none;">
-                    <div class="spinner"></div>
-                    <div class="progress-text">解析中...</div>
-                    <div class="progress-bar">
-                        <div class="progress-fill" id="progress-fill"></div>
-                    </div>
+                <span class="hint">每行一人，重名按独立名额处理</span>
+            </div>
+            <label class="sr-only" for="participant-input">参与者名单</label>
+            <textarea id="participant-input" rows="12" placeholder="张三
+李四
+王五
+赵六"></textarea>
+            <div class="setup-footer">
+                <span id="input-count">0 人</span>
+                <button class="button button-primary" id="create-session-button" type="button">创建抽奖</button>
+            </div>
+        </section>
+
+        <section class="panel lottery-panel hidden" id="lottery-panel" aria-labelledby="lottery-title">
+            <div class="panel-heading">
+                <div>
+                    <p class="section-kicker">STEP 02</p>
+                    <h2 id="lottery-title">开始抽奖</h2>
                 </div>
-                <input type="file" id="file-input" accept=".png,.jpg,.jpeg" hidden>
+                <div class="stats" aria-live="polite">
+                    <span><strong id="total-count">0</strong> 总人数</span>
+                    <span><strong id="remaining-count">0</strong> 待抽取</span>
+                    <span><strong id="drawn-count">0</strong> 已中奖</span>
+                </div>
             </div>
 
-            <div class="lottery-area" id="lottery-area" style="display: none;">
+            <div class="draw-stage" id="draw-stage" aria-live="polite">
+                <div class="draw-stage-label">本轮中奖者</div>
+                <div class="draw-result" id="draw-result">准备开始</div>
+                <div class="draw-round" id="draw-round">输入名单后开始抽奖</div>
+            </div>
+
+            <div class="lottery-actions">
+                <button class="button button-primary button-large" id="draw-button" type="button">开始抽一人</button>
+                <button class="button button-secondary" id="reset-button" type="button">重置本场</button>
+            </div>
+
+            <div class="participants-section">
+                <div class="subheading">
+                    <h3>参与者</h3>
+                    <span id="participant-status">等待抽奖</span>
+                </div>
                 <div class="participants-grid" id="participants-grid"></div>
-                
-                <div class="lottery-controls">
-                    <button class="btn-primary" id="btn-lottery">
-                        <span>🎲</span> 开始抽奖
-                    </button>
+            </div>
+
+            <div class="history-section">
+                <div class="subheading">
+                    <h3>中奖记录</h3>
+                    <span>按抽取顺序排列</span>
                 </div>
-
-                <div class="winners-section" id="winners-section" style="display: none;">
-                    <div class="section-title">
-                        <span>🏆</span> 已中奖者
-                    </div>
-                    <div class="winners-list" id="winners-list"></div>
-                </div>
+                <ol class="history-list" id="history-list"></ol>
+                <div class="empty-state" id="history-empty">本场还没有中奖记录</div>
             </div>
+        </section>
+    </main>
 
-            <div class="status-bar" id="status-bar" style="display: none;">
-                <span>参与者: <strong id="total-count">0</strong> 人</span>
-                <span>|</span>
-                <span>已抽取: <strong id="drawn-count">0</strong> 人</span>
-            </div>
-        </main>
-    </div>
-
-    <div class="winner-modal" id="winner-modal" style="display: none;">
-        <div class="modal-backdrop"></div>
-        <div class="modal-content">
-            <div class="modal-header">
-                <div class="celebration">🎉</div>
-                <div class="modal-title">恭喜！</div>
-            </div>
-            <div class="modal-body">
-                <div class="winner-avatar">
-                    <img id="winner-avatar-img" src="" alt="中奖者头像">
-                </div>
-                <div class="winner-name" id="winner-name"></div>
-                <div class="winner-round" id="winner-round"></div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn-primary" id="btn-continue">继续抽奖</button>
-                <button class="btn-secondary" id="btn-view-winners">查看名单</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="error-toast" id="error-toast" style="display: none;">
-        <span id="error-message"></span>
-    </div>
-
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="/static/js/app.js"></script>
 </body>
 </html>

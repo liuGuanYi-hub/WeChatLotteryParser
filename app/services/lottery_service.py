@@ -1,77 +1,103 @@
-from typing import List, Optional, Dict, Any
-from app.models.participant import Participant
+from copy import deepcopy
+from datetime import datetime, timezone
+from threading import RLock
+from typing import Any, Dict, List, Optional
+from uuid import uuid4
+
 from app.core.lottery import LotteryEngine
+from app.models.participant import Participant
+
+
+class SessionNotFoundError(LookupError):
+    pass
+
+
+class NoRemainingParticipantsError(ValueError):
+    pass
+
+
+class LotterySession:
+    def __init__(self, participants: List[Participant]):
+        self.id = str(uuid4())
+        self.created_at = datetime.now(timezone.utc)
+        self.participants = participants
+        self.history: List[Dict[str, Any]] = []
 
 
 class LotteryService:
-    def __init__(self):
-        self.engine = LotteryEngine()
-        self.current_participants: List[Participant] = []
-    
-    def set_participants(self, participants_data: List[Dict[str, Any]]) -> List[Participant]:
-        self.current_participants = [
-            Participant(**data) for data in participants_data
-        ]
-        self.engine.reset()
-        return self.current_participants
-    
-    def draw(self) -> Optional[Dict[str, Any]]:
-        remaining = self.engine.get_remaining(self.current_participants)
-        
-        if len(remaining) < 2:
-            return None
-        
-        winner = self.engine.draw(remaining)
-        
-        if winner:
+    """管理多个独立抽奖场次，业务状态不暴露给前端自行决定。"""
+
+    def __init__(self, engine: Optional[LotteryEngine] = None):
+        self.engine = engine or LotteryEngine()
+        self.sessions: Dict[str, LotterySession] = {}
+        self._lock = RLock()
+
+    def create_session(self, names: List[str]) -> Dict[str, Any]:
+        participants = [Participant(name=name) for name in names]
+        session = LotterySession(participants)
+        with self._lock:
+            self.sessions[session.id] = session
+        return self.snapshot(session.id)
+
+    def snapshot(self, session_id: str) -> Dict[str, Any]:
+        with self._lock:
+            session = self._get_session(session_id)
+            remaining = self._remaining(session)
             return {
-                "winner": winner.to_dict(),
-                "remaining_count": len(self.engine.get_remaining(self.current_participants)),
-                "total_participants": len(self.current_participants),
-                "draw_number": len(self.engine.history)
+                "session_id": session.id,
+                "created_at": session.created_at.isoformat(),
+                "participants": [deepcopy(item).to_dict() for item in session.participants],
+                "history": deepcopy(session.history),
+                "total_count": len(session.participants),
+                "remaining_count": len(remaining),
+                "drawn_count": len(session.history),
             }
-        
-        return None
-    
-    def get_winners(self, limit: int = 100, offset: int = 0) -> Dict[str, Any]:
-        winners = [p for p in self.current_participants if p.is_winner]
-        winners.sort(key=lambda x: x.winner_round or 0)
-        
-        paginated = winners[offset:offset + limit]
-        
-        return {
-            "winners": [w.to_dict() for w in paginated],
-            "total": len(winners),
-            "limit": limit,
-            "offset": offset
-        }
-    
-    def remove_winner(self, winner_id: str) -> Optional[Dict[str, Any]]:
-        winner = next((p for p in self.current_participants if p.id == winner_id), None)
-        
-        if not winner or not winner.is_winner:
-            return None
-        
-        remaining_count = len(self.engine.get_remaining(self.current_participants))
-        
-        return {
-            "removed_winner": {"id": winner.id, "name": winner.name},
-            "remaining_winners": len([p for p in self.current_participants if p.is_winner])
-        }
-    
-    def reset(self) -> Dict[str, Any]:
-        cleared_count = len([p for p in self.current_participants if p.is_winner])
-        
-        for p in self.current_participants:
-            p.is_winner = False
-            p.winner_round = None
-        
-        self.engine.reset()
-        
-        return {
-            "message": "抽奖已重置",
-            "cleared_winners_count": cleared_count
-        }
-    
-    def get_participants(self) -> List[Participant]:
-        return self.current_participants
+
+    def draw(self, session_id: str) -> Dict[str, Any]:
+        with self._lock:
+            session = self._get_session(session_id)
+            remaining = self._remaining(session)
+            if not remaining:
+                raise NoRemainingParticipantsError("没有可抽取的参与者")
+
+            winner = self.engine.draw(remaining)
+            round_number = len(session.history) + 1
+            winner.mark_winner(round_number)
+            record = {
+                "round": round_number,
+                "winner": deepcopy(winner).to_dict(),
+                "drawn_at": winner.drawn_at.isoformat() if winner.drawn_at else None,
+            }
+            session.history.append(record)
+            return {
+                "winner": deepcopy(winner).to_dict(),
+                "record": deepcopy(record),
+                "remaining_count": len(self._remaining(session)),
+                "total_count": len(session.participants),
+                "drawn_count": len(session.history),
+            }
+
+    def reset(self, session_id: str) -> Dict[str, Any]:
+        with self._lock:
+            session = self._get_session(session_id)
+            cleared_count = len(session.history)
+            for participant in session.participants:
+                participant.is_winner = False
+                participant.winner_round = None
+                participant.drawn_at = None
+            session.history.clear()
+            return {
+                "message": "抽奖已重置",
+                "cleared_count": cleared_count,
+                **self.snapshot(session_id),
+            }
+
+    def _get_session(self, session_id: str) -> LotterySession:
+        try:
+            return self.sessions[session_id]
+        except KeyError as exc:
+            raise SessionNotFoundError("抽奖场次不存在或已过期") from exc
+
+    @staticmethod
+    def _remaining(session: LotterySession) -> List[Participant]:
+        return LotteryEngine.remaining(session.participants)

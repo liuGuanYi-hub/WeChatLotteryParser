@@ -1,156 +1,81 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
-from typing import Dict, Any, List
-from app.services.ocr_service import OcrService
-from app.services.lottery_service import LotteryService
-from app.core.exceptions import (
-    InvalidImageFormat,
-    ImageTooLarge,
-    NoAvatarDetected,
-    EmptyParticipants,
-    InsufficientParticipants
-)
+from typing import Any, Dict, List
+
+from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel, Field, field_validator
+
 from app.core.config import get_settings
+from app.services.lottery_service import (
+    LotteryService,
+    NoRemainingParticipantsError,
+    SessionNotFoundError,
+)
+
 
 router = APIRouter(prefix="/api/lottery", tags=["lottery"])
-
-lottery_service = LotteryService()
-ocr_service = OcrService()
 settings = get_settings()
+lottery_service = LotteryService()
 
 
-@router.post("/participants")
-async def upload_and_extract(file: UploadFile = File(...)) -> Dict[str, Any]:
+class CreateSessionRequest(BaseModel):
+    participants: List[str] = Field(min_length=1, max_length=settings.max_participants)
+
+    @field_validator("participants")
+    @classmethod
+    def validate_participants(cls, value: List[str]) -> List[str]:
+        names = [name.strip() for name in value if name and name.strip()]
+        if not names:
+            raise ValueError("至少需要一名参与者")
+        if len(names) > settings.max_participants:
+            raise ValueError(f"参与者不能超过 {settings.max_participants} 人")
+        if any(len(name) > 100 for name in names):
+            raise ValueError("单个参与者名称不能超过 100 个字符")
+        return names
+
+
+def success(data: Dict[str, Any]) -> Dict[str, Any]:
+    return {"success": True, "data": data, "error": None}
+
+
+def error(code: str, message: str) -> Dict[str, Any]:
+    return {"success": False, "data": None, "error": {"code": code, "message": message}}
+
+
+def get_session_or_404(session_id: str):
     try:
-        if not file.filename:
-            raise InvalidImageFormat()
-        
-        ext = "." + file.filename.split(".")[-1].lower()
-        if ext not in settings.ALLOWED_EXTENSIONS:
-            raise InvalidImageFormat()
-        
-        contents = await file.read()
-        
-        if len(contents) > settings.MAX_FILE_SIZE:
-            raise ImageTooLarge()
-        
-        participants_data = ocr_service.extract_participants(contents)
-        
-        if not participants_data:
-            raise NoAvatarDetected()
-        
-        participants = lottery_service.set_participants(participants_data)
-        
-        return {
-            "success": True,
-            "data": {
-                "participants": [p.to_dict() for p in participants],
-                "total": len(participants)
-            },
-            "error": None
-        }
-    
-    except InvalidImageFormat as e:
-        return {
-            "success": False,
-            "data": None,
-            "error": {"code": e.code, "message": e.message}
-        }
-    except ImageTooLarge as e:
-        return {
-            "success": False,
-            "data": None,
-            "error": {"code": e.code, "message": e.message}
-        }
-    except NoAvatarDetected as e:
-        return {
-            "success": False,
-            "data": None,
-            "error": {"code": e.code, "message": e.message}
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "data": None,
-            "error": {"code": "SYSTEM_ERROR", "message": str(e)}
-        }
+        return lottery_service.snapshot(session_id)
+    except SessionNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error("SESSION_NOT_FOUND", str(exc))) from exc
 
 
-@router.post("/draw")
-async def draw() -> Dict[str, Any]:
+@router.post("/sessions", status_code=status.HTTP_201_CREATED)
+async def create_session(payload: CreateSessionRequest) -> Dict[str, Any]:
+    return success(lottery_service.create_session(payload.participants))
+
+
+@router.get("/sessions/{session_id}")
+async def get_session(session_id: str) -> Dict[str, Any]:
+    return success(get_session_or_404(session_id))
+
+
+@router.post("/sessions/{session_id}/draw")
+async def draw(session_id: str) -> Dict[str, Any]:
     try:
-        remaining = lottery_service.get_participants()
-        
-        if not remaining:
-            raise EmptyParticipants()
-        
-        remaining_not_winner = [p for p in remaining if not p.is_winner]
-        
-        if len(remaining_not_winner) < 2:
-            raise InsufficientParticipants()
-        
-        result = lottery_service.draw()
-        
-        return {
-            "success": True,
-            "data": result,
-            "error": None
-        }
-    
-    except EmptyParticipants as e:
-        return {
-            "success": False,
-            "data": None,
-            "error": {"code": e.code, "message": e.message}
-        }
-    except InsufficientParticipants as e:
-        return {
-            "success": False,
-            "data": None,
-            "error": {"code": e.code, "message": e.message}
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "data": None,
-            "error": {"code": "SYSTEM_ERROR", "message": str(e)}
-        }
+        return success(lottery_service.draw(session_id))
+    except SessionNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error("SESSION_NOT_FOUND", str(exc))) from exc
+    except NoRemainingParticipantsError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error("NO_REMAINING_PARTICIPANTS", str(exc))) from exc
 
 
-@router.get("/winners")
-async def get_winners(limit: int = 100, offset: int = 0) -> Dict[str, Any]:
-    result = lottery_service.get_winners(limit, offset)
-    
-    return {
-        "success": True,
-        "data": result,
-        "error": None
-    }
+@router.post("/sessions/{session_id}/reset")
+async def reset(session_id: str) -> Dict[str, Any]:
+    try:
+        return success(lottery_service.reset(session_id))
+    except SessionNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error("SESSION_NOT_FOUND", str(exc))) from exc
 
 
-@router.delete("/winners/{winner_id}")
-async def remove_winner(winner_id: str) -> Dict[str, Any]:
-    result = lottery_service.remove_winner(winner_id)
-    
-    if not result:
-        return {
-            "success": False,
-            "data": None,
-            "error": {"code": "WINNER_NOT_FOUND", "message": "未找到指定的中奖者"}
-        }
-    
-    return {
-        "success": True,
-        "data": result,
-        "error": None
-    }
-
-
-@router.post("/reset")
-async def reset() -> Dict[str, Any]:
-    result = lottery_service.reset()
-    
-    return {
-        "success": True,
-        "data": result,
-        "error": None
-    }
+@router.get("/sessions/{session_id}/history")
+async def history(session_id: str) -> Dict[str, Any]:
+    snapshot = get_session_or_404(session_id)
+    return success({"history": snapshot["history"], "total": len(snapshot["history"])})

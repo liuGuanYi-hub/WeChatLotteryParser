@@ -1,34 +1,25 @@
-from typing import Optional, Dict, Any
-from pydantic import BaseModel, Field
-import uuid
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional
+from uuid import uuid4
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Participant(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    name: str
-    avatar_base64: str
-    confidence: float = 1.0
+    """抽奖参与者。重复昵称也保留为不同的抽奖名额。"""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    name: str = Field(min_length=1, max_length=100)
     is_winner: bool = False
     winner_round: Optional[int] = None
-    
+    drawn_at: Optional[datetime] = None
+
+    def mark_winner(self, round_number: int) -> None:
+        self.is_winner = True
+        self.winner_round = round_number
+        self.drawn_at = datetime.now(timezone.utc)
+
     def to_dict(self) -> Dict[str, Any]:
-        return {
-            "id": self.id,
-            "name": self.name,
-            "avatar_base64": self.avatar_base64,
-            "confidence": self.confidence,
-            "is_winner": self.is_winner,
-            "winner_round": self.winner_round
-        }
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "id": "550e8400-e29b-41d4-a716-446655440000",
-                "name": "张三",
-                "avatar_base64": "data:image/png;base64,iVBORw0KG...",
-                "confidence": 0.95,
-                "is_winner": False,
-                "winner_round": None
-            }
-        }
+        return self.model_dump(mode="json")
