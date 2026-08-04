@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="简单、清晰、可重复操作的名单抽奖器">
-    <title>简易抽奖器</title>
+    <meta name="description" content="支持奖项配置、批量抽取和断点恢复的名单抽奖器">
+    <title>名单抽奖器</title>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
@@ -12,8 +12,8 @@
         <header class="app-header">
             <div>
                 <p class="eyebrow">FAIR DRAW</p>
-                <h1>简易抽奖器</h1>
-                <p class="subtitle">名单交给服务端抽取，浏览器只负责展示结果。</p>
+                <h1>名单抽奖器</h1>
+                <p class="subtitle">服务端安全随机抽取，支持奖项名额、批量中奖和断点恢复。</p>
             </div>
             <div class="header-actions">
                 <button class="button button-ghost" id="new-session-button" type="button">新建抽奖</button>
@@ -27,13 +27,25 @@
                     <p class="section-kicker">STEP 01</p>
                     <h2 id="setup-title">输入参与者名单</h2>
                 </div>
-                <span class="hint">每行一人，重名按独立名额处理</span>
+                <span class="hint">每行一人，也支持逗号分隔；重名按独立名额处理</span>
+            </div>
+            <div class="config-grid">
+                <label class="field">
+                    <span>奖项名称</span>
+                    <input id="prize-name" type="text" maxlength="100" value="本场抽奖" placeholder="例如：一等奖">
+                </label>
+                <label class="field">
+                    <span>中奖名额</span>
+                    <input id="winner-count" type="number" min="1" max="1000" value="1">
+                </label>
             </div>
             <label class="sr-only" for="participant-input">参与者名单</label>
             <textarea id="participant-input" rows="12" placeholder="张三
 李四
 王五
-赵六"></textarea>
+赵六
+
+也可以：张三，李四，王五"></textarea>
             <div class="setup-footer">
                 <span id="input-count">0 人</span>
                 <button class="button button-primary" id="create-session-button" type="button">创建抽奖</button>
@@ -50,6 +62,7 @@
                     <span><strong id="total-count">0</strong> 总人数</span>
                     <span><strong id="remaining-count">0</strong> 待抽取</span>
                     <span><strong id="drawn-count">0</strong> 已中奖</span>
+                    <span><strong id="slot-count">0</strong> 剩余名额</span>
                 </div>
             </div>
 
@@ -60,7 +73,12 @@
             </div>
 
             <div class="lottery-actions">
-                <button class="button button-primary button-large" id="draw-button" type="button">开始抽一人</button>
+                <label class="draw-count-control">
+                    <span>本次抽取</span>
+                    <input id="draw-count" type="number" min="1" max="100" value="1">
+                    <span>人</span>
+                </label>
+                <button class="button button-primary button-large" id="draw-button" type="button">开始抽取</button>
                 <button class="button button-secondary" id="reset-button" type="button">重置本场</button>
             </div>
 

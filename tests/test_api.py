@@ -33,6 +33,29 @@ def test_create_draw_and_read_session():
     assert current.json()["data"]["remaining_count"] == 1
 
 
+def test_create_session_supports_prize_quota_and_batch_draw():
+    created = client.post(
+        "/api/lottery/sessions",
+        json={
+            "participants": ["甲", "乙", "丙"],
+            "prize_name": "二等奖",
+            "winner_count": 2,
+        },
+    )
+
+    assert created.status_code == 201
+    session_id = created.json()["data"]["session_id"]
+
+    drawn = client.post(
+        f"/api/lottery/sessions/{session_id}/draw",
+        json={"count": 2},
+    )
+
+    assert drawn.status_code == 200
+    assert len(drawn.json()["data"]["winners"]) == 2
+    assert drawn.json()["data"]["remaining_slots"] == 0
+
+
 def test_invalid_session_returns_404():
     response = client.get("/api/lottery/sessions/not-found")
 

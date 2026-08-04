@@ -54,6 +54,9 @@ inference*/
 .coverage
 htmlcov/
 
+# Local lottery data
+data/
+
 # Temporary files
 tmp/
 temp/

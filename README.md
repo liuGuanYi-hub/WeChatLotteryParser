@@ -13,7 +13,19 @@
 - 重置本场抽奖。
 - 导出文本中奖名单。
 
-当前版本不读取图片、不识别头像、不加载 OCR，也不需要数据库或外部服务。
+系统不读取图片、不识别头像、不加载 OCR，也不依赖外部数据库或外部服务。
+
+## GitHub 对比后的功能优化
+
+参考开源项目中已经验证过的抽奖能力，本项目保留轻量 FastAPI + 原生前端结构，新增：
+
+- 奖项名称和中奖名额配置；不传中奖名额时支持连续抽取。
+- 一次抽取多人，服务端逐个抽取并保证同一场次不重复中奖。
+- SQLite 持久化场次、参与者和中奖记录，服务重启后可通过场次 ID 恢复。
+- 浏览器使用 `localStorage` 记住最近场次，刷新页面后自动恢复抽奖现场。
+- 名单支持换行、逗号、中文逗号、分号分隔；抽奖结果可以导出为文本。
+
+本地数据库文件位于 `data/lottery.sqlite3`，只保存在项目工作区，不提交到 Git。
 
 ## 快速开始
 
@@ -34,7 +46,7 @@ API 文档：<http://127.0.0.1:8000/docs>
 |---|---|---|
 | POST | `/api/lottery/sessions` | 创建抽奖场次 |
 | GET | `/api/lottery/sessions/{session_id}` | 查询场次状态 |
-| POST | `/api/lottery/sessions/{session_id}/draw` | 抽取一人 |
+| POST | `/api/lottery/sessions/{session_id}/draw` | 抽取一人或多人 |
 | POST | `/api/lottery/sessions/{session_id}/reset` | 重置本场 |
 | GET | `/api/lottery/sessions/{session_id}/history` | 查询中奖历史 |
 | GET | `/healthz` | 健康检查 |
@@ -49,6 +61,16 @@ Invoke-RestMethod `
   -Body '{"participants":["张三","李四","王五"]}'
 ```
 
+批量抽取示例：
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri http://127.0.0.1:8000/api/lottery/sessions/<session_id>/draw `
+  -ContentType 'application/json' `
+  -Body '{"count":2}'
+```
+
 ## 项目结构
 
 ```text
@@ -58,6 +80,7 @@ app/
 ├── core/config.py                # 应用配置
 ├── models/participant.py         # 参与者模型
 ├── services/lottery_service.py   # 场次和中奖状态
+├── services/storage.py            # SQLite 场次持久化
 └── main.py                       # FastAPI 入口
 static/                           # CSS 和 JavaScript
 templates/                        # HTML 页面
@@ -74,11 +97,10 @@ python -m compileall -q app tests
 
 ## 当前限制
 
-- 场次状态保存在进程内，服务重启后会丢失。
 - 当前没有登录、权限和多人协作功能。
 - 当前不保存原始名单文件。
 
-如未来需要跨重启保存结果，再增加 SQLite；如需要多人协作，再增加数据库、缓存和权限控制。
+如需要多人协作，再增加数据库、缓存和权限控制；当前 SQLite 适合单机或单进程抽奖场景。
 
 ## 许可证
 
